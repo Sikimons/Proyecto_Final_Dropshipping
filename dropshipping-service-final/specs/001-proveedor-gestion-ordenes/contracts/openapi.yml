@@ -1,0 +1,603 @@
+openapi: "3.0.3"
+
+info:
+  title: Dropshipping Service — Provider Order Management API
+  description: |
+    API REST para la gestión de órdenes Dropshipping por parte del proveedor.
+    Permite al proveedor autenticado consultar sus órdenes asignadas y responderlas
+    (aceptar con fecha estimada de despacho o rechazar con motivo).
+
+    **API First**: Este contrato es la fuente de verdad. Los stubs del servidor se
+    generan automáticamente con openapi-generator.
+
+    **Autenticación**: Bearer token requerido en todas las operaciones. La autenticación
+    es gestionada por un sistema externo; este servicio valida el token y extrae el
+    `providerId` del contexto de seguridad.
+  version: "1.0.0"
+  contact:
+    name: Equipo Dropshipping Service
+    email: claude@colinealcorp.com
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Servidor de desarrollo local
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Provider Orders
+    description: Operaciones de consulta y respuesta de órdenes para proveedores
+
+paths:
+
+  /providers/{providerId}/orders:
+    get:
+      tags:
+        - Provider Orders
+      summary: Listar órdenes asignadas al proveedor
+      description: |
+        Retorna todas las órdenes Dropshipping asignadas al proveedor indicado.
+        Se puede filtrar por estado. Si no se especifica filtro, retorna todas las órdenes.
+      operationId: getProviderOrders
+      parameters:
+        - $ref: '#/components/parameters/providerIdParam'
+        - name: status
+          in: query
+          required: false
+          description: Filtrar por estado de la orden
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+      responses:
+        "200":
+          description: Listado de órdenes recuperado exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DropshippingOrderSummary'
+              examples:
+                ordenesPendientes:
+                  summary: Dos órdenes pendientes
+                  value:
+                    - orderId: 1
+                      orderCode: "ORD-2026-0001"
+                      productCode: "PROD-001"
+                      productDescription: "Zapatillas Running XR-500"
+                      quantity: 3
+                      status: "PENDING"
+                      expectedDeliveryDate: "2026-07-15"
+                    - orderId: 2
+                      orderCode: "ORD-2026-0002"
+                      productCode: "PROD-042"
+                      productDescription: "Mochila Outdoor 45L"
+                      quantity: 1
+                      status: "PENDING"
+                      expectedDeliveryDate: "2026-07-18"
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+
+  /providers/{providerId}/orders/{orderId}:
+    get:
+      tags:
+        - Provider Orders
+      summary: Obtener detalle completo de una orden
+      description: |
+        Retorna el detalle completo de una orden asignada al proveedor, incluyendo
+        dirección de entrega, contacto del cliente, condiciones especiales e historial
+        de estado.
+      operationId: getOrderDetail
+      parameters:
+        - $ref: '#/components/parameters/providerIdParam'
+        - $ref: '#/components/parameters/orderIdParam'
+      responses:
+        "200":
+          description: Detalle de la orden recuperado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DropshippingOrderDetail'
+              examples:
+                ordenPendiente:
+                  summary: Orden pendiente con condiciones especiales
+                  value:
+                    orderId: 1
+                    orderCode: "ORD-2026-0001"
+                    productCode: "PROD-001"
+                    productDescription: "Zapatillas Running XR-500"
+                    quantity: 3
+                    deliveryAddress:
+                      street: "Av. Naciones Unidas E35-171"
+                      city: "Quito"
+                      state: "Pichincha"
+                      postalCode: "170503"
+                      country: "Ecuador"
+                    customerName: "María García López"
+                    customerContact: "mgarcia@email.com / +593-99-1234567"
+                    expectedDeliveryDate: "2026-07-15"
+                    specialConditions: "Entregar solo en horario de oficina (8h-17h)"
+                    status: "PENDING"
+                    createdAt: "2026-07-05T10:30:00Z"
+                    updatedAt: "2026-07-05T10:30:00Z"
+                    statusHistory: []
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "403":
+          $ref: '#/components/responses/Forbidden'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+
+  /providers/{providerId}/orders/{orderId}/accept:
+    post:
+      tags:
+        - Provider Orders
+      summary: Aceptar una orden con fecha estimada de despacho
+      description: |
+        El proveedor acepta la orden indicando la fecha estimada de despacho.
+        - La fecha estimada DEBE ser posterior a la fecha actual.
+        - Solo se pueden aceptar órdenes en estado PENDING.
+        - Registra el actor (providerId) y el timestamp exacto.
+        - Notifica al analista asignado de forma automática.
+      operationId: acceptOrder
+      parameters:
+        - $ref: '#/components/parameters/providerIdParam'
+        - $ref: '#/components/parameters/orderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptOrderRequest'
+            examples:
+              aceptacionValida:
+                summary: Aceptación con fecha futura válida
+                value:
+                  estimatedDispatchDate: "2026-07-10"
+      responses:
+        "200":
+          description: Orden aceptada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderActionResponse'
+              examples:
+                aceptacionExitosa:
+                  summary: Respuesta de aceptación
+                  value:
+                    orderId: 1
+                    orderCode: "ORD-2026-0001"
+                    previousStatus: "PENDING"
+                    newStatus: "ACCEPTED"
+                    actorId: "42"
+                    timestamp: "2026-07-05T14:22:10Z"
+                    estimatedDispatchDate: "2026-07-10"
+                    message: "Orden aceptada exitosamente. Analista notificado."
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          description: Conflicto — La orden ya tiene un estado definitivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ordenYaProcesada:
+                  summary: La orden ya fue aceptada o rechazada
+                  value:
+                    timestamp: "2026-07-05T14:22:10Z"
+                    status: 409
+                    error: "Conflict"
+                    message: "La orden ORD-2026-0001 ya se encuentra en estado ACCEPTED y no puede modificarse."
+                    path: "/api/v1/providers/42/orders/1/accept"
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+
+  /providers/{providerId}/orders/{orderId}/reject:
+    post:
+      tags:
+        - Provider Orders
+      summary: Rechazar una orden indicando el motivo
+      description: |
+        El proveedor rechaza la orden indicando obligatoriamente el motivo.
+        - Solo se pueden rechazar órdenes en estado PENDING.
+        - Registra el actor (providerId), el motivo y el timestamp exacto.
+        - Notifica al equipo comercial de forma automática e inmediata.
+      operationId: rejectOrder
+      parameters:
+        - $ref: '#/components/parameters/providerIdParam'
+        - $ref: '#/components/parameters/orderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectOrderRequest'
+            examples:
+              rechazoValido:
+                summary: Rechazo con motivo especificado
+                value:
+                  reason: "No contamos con stock del producto PROD-001 hasta el 2026-08-01."
+      responses:
+        "200":
+          description: Orden rechazada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderActionResponse'
+              examples:
+                rechazoExitoso:
+                  summary: Respuesta de rechazo
+                  value:
+                    orderId: 1
+                    orderCode: "ORD-2026-0001"
+                    previousStatus: "PENDING"
+                    newStatus: "REJECTED"
+                    actorId: "42"
+                    timestamp: "2026-07-05T14:25:00Z"
+                    rejectionReason: "No contamos con stock del producto PROD-001 hasta el 2026-08-01."
+                    message: "Orden rechazada. Equipo comercial notificado."
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "404":
+          $ref: '#/components/responses/NotFound'
+        "409":
+          description: Conflicto — La orden ya tiene un estado definitivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                ordenYaProcesada:
+                  summary: La orden ya fue aceptada o rechazada
+                  value:
+                    timestamp: "2026-07-05T14:25:00Z"
+                    status: 409
+                    error: "Conflict"
+                    message: "La orden ORD-2026-0001 ya se encuentra en estado REJECTED y no puede modificarse."
+                    path: "/api/v1/providers/42/orders/1/reject"
+        "500":
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+
+  parameters:
+    providerIdParam:
+      name: providerId
+      in: path
+      required: true
+      description: Identificador único del proveedor
+      schema:
+        type: integer
+        format: int64
+        example: 42
+
+    orderIdParam:
+      name: orderId
+      in: path
+      required: true
+      description: Identificador único de la orden
+      schema:
+        type: integer
+        format: int64
+        example: 1
+
+  schemas:
+
+    OrderStatus:
+      type: string
+      enum:
+        - PENDING
+        - ACCEPTED
+        - REJECTED
+      description: |
+        Estado de la orden Dropshipping:
+        - PENDING: orden asignada, pendiente de respuesta del proveedor
+        - ACCEPTED: proveedor aceptó con fecha estimada de despacho
+        - REJECTED: proveedor rechazó con motivo
+
+    AddressDto:
+      type: object
+      required:
+        - street
+        - city
+        - state
+        - country
+      properties:
+        street:
+          type: string
+          example: "Av. Naciones Unidas E35-171"
+        city:
+          type: string
+          example: "Quito"
+        state:
+          type: string
+          example: "Pichincha"
+        postalCode:
+          type: string
+          nullable: true
+          example: "170503"
+        country:
+          type: string
+          example: "Ecuador"
+
+    DropshippingOrderSummary:
+      type: object
+      required:
+        - orderId
+        - orderCode
+        - productCode
+        - productDescription
+        - quantity
+        - status
+        - expectedDeliveryDate
+      properties:
+        orderId:
+          type: integer
+          format: int64
+          example: 1
+        orderCode:
+          type: string
+          example: "ORD-2026-0001"
+        productCode:
+          type: string
+          example: "PROD-001"
+        productDescription:
+          type: string
+          example: "Zapatillas Running XR-500"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 3
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        expectedDeliveryDate:
+          type: string
+          format: date
+          example: "2026-07-15"
+
+    OrderStatusEventDto:
+      type: object
+      properties:
+        eventId:
+          type: integer
+          format: int64
+        previousStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        newStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        actorId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        estimatedDispatchDate:
+          type: string
+          format: date
+          nullable: true
+        rejectionReason:
+          type: string
+          nullable: true
+
+    DropshippingOrderDetail:
+      type: object
+      required:
+        - orderId
+        - orderCode
+        - productCode
+        - productDescription
+        - quantity
+        - deliveryAddress
+        - customerName
+        - customerContact
+        - expectedDeliveryDate
+        - status
+        - createdAt
+        - updatedAt
+        - statusHistory
+      properties:
+        orderId:
+          type: integer
+          format: int64
+          example: 1
+        orderCode:
+          type: string
+          example: "ORD-2026-0001"
+        productCode:
+          type: string
+          example: "PROD-001"
+        productDescription:
+          type: string
+          example: "Zapatillas Running XR-500"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 3
+        deliveryAddress:
+          $ref: '#/components/schemas/AddressDto'
+        customerName:
+          type: string
+          example: "María García López"
+        customerContact:
+          type: string
+          example: "mgarcia@email.com / +593-99-1234567"
+        expectedDeliveryDate:
+          type: string
+          format: date
+          example: "2026-07-15"
+        specialConditions:
+          type: string
+          nullable: true
+          example: "Entregar solo en horario de oficina (8h-17h)"
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        statusHistory:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderStatusEventDto'
+
+    AcceptOrderRequest:
+      type: object
+      required:
+        - estimatedDispatchDate
+      properties:
+        estimatedDispatchDate:
+          type: string
+          format: date
+          description: Fecha estimada de despacho. DEBE ser posterior a la fecha actual.
+          example: "2026-07-10"
+
+    RejectOrderRequest:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          description: Motivo del rechazo. Obligatorio y no puede estar vacío.
+          example: "No contamos con stock del producto PROD-001 hasta el 2026-08-01."
+
+    OrderActionResponse:
+      type: object
+      required:
+        - orderId
+        - orderCode
+        - previousStatus
+        - newStatus
+        - actorId
+        - timestamp
+        - message
+      properties:
+        orderId:
+          type: integer
+          format: int64
+        orderCode:
+          type: string
+        previousStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        newStatus:
+          $ref: '#/components/schemas/OrderStatus'
+        actorId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        estimatedDispatchDate:
+          type: string
+          format: date
+          nullable: true
+        rejectionReason:
+          type: string
+          nullable: true
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+        - path
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Solicitud inválida (validación fallida)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            fechaPasada:
+              summary: Fecha estimada en el pasado
+              value:
+                timestamp: "2026-07-05T14:22:10Z"
+                status: 400
+                error: "Bad Request"
+                message: "La fecha estimada de despacho debe ser posterior a la fecha actual."
+                path: "/api/v1/providers/42/orders/1/accept"
+            motivoVacio:
+              summary: Motivo de rechazo vacío
+              value:
+                timestamp: "2026-07-05T14:25:00Z"
+                status: 400
+                error: "Bad Request"
+                message: "El motivo de rechazo es obligatorio y debe tener al menos 10 caracteres."
+                path: "/api/v1/providers/42/orders/1/reject"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            ordenNoEncontrada:
+              summary: Orden no encontrada para este proveedor
+              value:
+                timestamp: "2026-07-05T14:22:10Z"
+                status: 404
+                error: "Not Found"
+                message: "No se encontró la orden con ID 999 para el proveedor 42."
+                path: "/api/v1/providers/42/orders/999"
+
+    Forbidden:
+      description: El proveedor no tiene acceso a esta orden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalServerError:
+      description: Error interno del servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            errorInterno:
+              summary: Error inesperado
+              value:
+                timestamp: "2026-07-05T14:22:10Z"
+                status: 500
+                error: "Internal Server Error"
+                message: "Ocurrió un error inesperado. Por favor contacte al administrador."
+                path: "/api/v1/providers/42/orders/1/accept"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token JWT emitido por el sistema de autenticación externo.
+        Incluir en el header: `Authorization: Bearer <token>`

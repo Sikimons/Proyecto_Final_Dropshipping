@@ -1,0 +1,108 @@
+{
+  "proyecto": "dropshipping-service-final",
+  "version": "0.0.1-SNAPSHOT",
+  "fecha": "2026-07-05",
+  "commit": "fa46d70",
+  "tests": {
+    "comando": "./gradlew test jacocoTestReport",
+    "passed": 70,
+    "total": 70,
+    "coverage": 96.91,
+    "coverage_fuente": "build/reports/jacoco/test/jacocoTestReport.xml (LINE covered=345/356 = 96.91%)"
+  },
+  "security": {
+    "fuente": "grep manual sobre src/main/java + src/main/resources + revisión de dependencias build.gradle",
+    "critical": 0,
+    "high": 2,
+    "secrets": 0,
+    "hallazgos": [
+      {
+        "severidad": "high",
+        "archivo": "src/main/resources/application.yaml:10",
+        "linea": 10,
+        "descripcion": "H2 console habilitado (h2.console.enabled=true) sin filtro de seguridad. Expone /h2-console sin autenticación. Deshabilitar en perfil prod."
+      },
+      {
+        "severidad": "high",
+        "archivo": "build.gradle:140-185",
+        "linea": 140,
+        "descripcion": "spring-boot-starter-security ausente. No existe SecurityFilterChain; endpoints /api/v1/** accesibles sin validación de token. El spec declara auth externa, pero este servicio no la verifica activamente."
+      }
+    ]
+  },
+  "spec": "specs/001-proveedor-gestion-ordenes/spec.md",
+  "criteria": [
+    {
+      "id": "FR-001",
+      "fuente": "spec.md · FR-001 — órdenes filtradas por proveedor",
+      "status": "cumple",
+      "evidencia": "GetProviderOrdersServiceTest.given_proveedorConOrdenes_when_getOrders_then_retornaListaCompleta() PASA; GetOrderDetailServiceTest.given_ordenDeOtroProveedor_when_getOrder_then_lanzaOrderNotFoundException() PASA; BDD 'El proveedor ve sus órdenes con todos los campos requeridos' PASA"
+    },
+    {
+      "id": "FR-002",
+      "fuente": "spec.md · FR-002 — campos obligatorios de cada orden",
+      "status": "cumple",
+      "evidencia": "OrderWebMapperTest.given_domainOrder_when_toSummary_then_allFieldsMapped() PASA; BDD detail steps verifican deliveryAddress (street/city/state/country), customerName, customerContact, expectedDeliveryDate PASAN; BDD summary verifica productCode y productDescription"
+    },
+    {
+      "id": "FR-003",
+      "fuente": "spec.md · FR-003 — aceptar orden PENDING con fecha futura obligatoria",
+      "status": "cumple",
+      "evidencia": "AcceptOrderControllerTest.given_ordenPendiente_when_postAccept_then_http200() PASA; BDD 'El proveedor acepta una orden pendiente con fecha futura válida' HTTP 200 PASA"
+    },
+    {
+      "id": "FR-004",
+      "fuente": "spec.md · FR-004 — cambiar estado a ACCEPTED, registrar actor y timestamp",
+      "status": "cumple",
+      "evidencia": "AcceptOrderServiceTest.given_ordenPendiente_when_accept_then_cambiaAAccepted() verifica saveOrder y saveEvent invocados PASA; AcceptOrderService:57-61 crea OrderStatusEvent con actor=String.valueOf(providerId) y timestamp=LocalDateTime.now(); BDD end-to-end retorna newStatus=ACCEPTED PASA"
+    },
+    {
+      "id": "FR-005",
+      "fuente": "spec.md · FR-005 — notificar al analista al aceptar",
+      "status": "cumple",
+      "evidencia": "AcceptOrderServiceTest.given_ordenPendiente_when_accept_then_llamaNotifyOrderAccepted() verifica notificationPort.notifyOrderAccepted(any()) PASA"
+    },
+    {
+      "id": "FR-006",
+      "fuente": "spec.md · FR-006 — rechazar orden PENDING con motivo obligatorio",
+      "status": "cumple",
+      "evidencia": "RejectOrderControllerTest.given_ordenPendiente_when_postReject_then_http200() PASA; BDD 'El proveedor rechaza una orden pendiente con motivo válido' HTTP 200 PASA"
+    },
+    {
+      "id": "FR-007",
+      "fuente": "spec.md · FR-007 — cambiar estado a REJECTED, registrar motivo, actor y timestamp",
+      "status": "cumple",
+      "evidencia": "RejectOrderServiceTest.given_ordenPendiente_when_reject_then_cambiaARejected() PASA; BDD 'el campo rejectionReason contiene el motivo enviado' PASA; RejectOrderService crea OrderStatusEvent con reason, actor y timestamp"
+    },
+    {
+      "id": "FR-008",
+      "fuente": "spec.md · FR-008 — alertar al equipo comercial al rechazar",
+      "status": "cumple",
+      "evidencia": "RejectOrderServiceTest.given_ordenPendiente_when_reject_then_llamaNotifyOrderRejected() verifica notificationPort.notifyOrderRejected(any()) PASA"
+    },
+    {
+      "id": "FR-009",
+      "fuente": "spec.md · FR-009 — impedir transición desde estado definitivo",
+      "status": "cumple",
+      "evidencia": "AcceptOrderServiceTest.given_ordenYaAceptada_when_accept_then_lanzaOrderAlreadyProcessedException() PASA; RejectOrderServiceTest.given_ordenYaRechazada_when_reject_then_lanzaOrderAlreadyProcessedException() PASA; BDD HTTP 409 para orden ya procesada PASAN"
+    },
+    {
+      "id": "FR-010",
+      "fuente": "spec.md · FR-010 — fecha estimada de despacho debe ser futura",
+      "status": "cumple",
+      "evidencia": "AcceptOrderServiceTest.given_fechaEnPasado_when_accept_then_lanzaInvalidDispatchDateException() PASA; AcceptOrderControllerTest.given_fechaPasada_when_postAccept_then_http400() PASA; BDD 'El proveedor intenta aceptar con una fecha en el pasado' HTTP 400 PASA"
+    },
+    {
+      "id": "EC-001",
+      "fuente": "spec.md · Edge Case — idempotencia ante acción duplicada",
+      "status": "cumple",
+      "evidencia": "FR-009 provee la guardia de idempotencia: una acción duplicada sobre una orden ya procesada lanza OrderAlreadyProcessedException. Tests: given_ordenYaAceptada_when_accept_then_lanzaOrderAlreadyProcessedException() y given_ordenYaRechazada_when_reject_then_lanzaOrderAlreadyProcessedException() PASAN"
+    },
+    {
+      "id": "EC-002",
+      "fuente": "spec.md · Edge Case — fallo de notificación: reintentar y registrar evento de fallo",
+      "status": "cumple",
+      "evidencia": "InternalNotificationAdapter implementa @Retryable(maxAttempts=3, backoff) + @Recover que loguea [NOTIFICATION_FAILURE_EVENT]; @EnableRetry activo en ApplicationConfig. Tests: InternalNotificationAdapterRetryTest.given_sendFails_when_notifyOrderAccepted_then_retriedAndFailureEventLogged() verifica 3 reintentos y log NOTIFICATION_FAILURE_EVENT PASA; AcceptOrderServiceNotificationFailureTest.given_notificationFails_when_accept_then_orderAndEventPersistedBeforeNotification() verifica InOrder(saveOrder, saveEvent, notify) — estado persiste antes de notificar PASA"
+    }
+  ]
+}

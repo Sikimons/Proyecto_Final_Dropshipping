@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- Exclude generated OpenAPI code -->
+    <Match>
+        <Package name="~.*\.generated\..*"/>
+    </Match>
+    <!-- Exclude JPA entities (Lombok-generated methods may trigger EI warnings) -->
+    <Match>
+        <Package name="~.*\.persistence\.entity\..*"/>
+    </Match>
+</FindBugsFilter>

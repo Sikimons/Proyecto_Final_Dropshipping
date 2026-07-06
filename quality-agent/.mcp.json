@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": ["semgrep-mcp"],
       "env": {
-         "SEMGREP_APP_TOKEN": "${SEMGREP_APP_TOKEN}"
+          "SEMGREP_APP_TOKEN": "${SEMGREP_APP_TOKEN}"
       }
     }
   }
